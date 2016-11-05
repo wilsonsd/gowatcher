@@ -17,6 +17,12 @@ class FrameSelector:
         self.last_good_frame = None
         self.last_good_frame_bw = None
         self.edges = None
+        self.window = 20
+        self.board_average = 0
+        self.edge_average = 0
+        self.decay_rate = 0.3
+        self.recent_board_maximum = 0
+        self.difference_threshold = 0.5
 
     def __getattr__(self, n):
         return getattr(self.cap, n)
@@ -39,7 +45,14 @@ class FrameSelector:
             #cv2.imshow('edges', 255*self.edges)
             
 
-
+    def diff(self, im):
+        if len(im.shape) == 3 and im.shape[2] > 1:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        diff = cv2.absdiff(self.last_good_frame_bw, im)
+        ret, diff = cv2.threshold(diff, 35, 1, cv2.THRESH_BINARY)
+        ker = np.ones((5,5), dtype=np.uint8)
+        diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
+        return diff
 
     def initialize(self):
         '''Watch the video for a while to initialize recordkeeping. Blocks.
@@ -52,8 +65,32 @@ class FrameSelector:
         self.last_good_frame = example_frame
         self.last_good_frame_bw = cv2.cvtColor(
             example_frame, cv2.COLOR_BGR2GRAY)
-        
-        return None
+
+        for i in range(self.window):
+            ret, frame = self.read()
+            self.accumulate_difference(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+
+    def accumulate_difference(self, imgray):
+        diff = self.diff(imgray)
+
+        if self.edges is None:
+            edges = np.ones(diff.shape, dtype='uint8')
+            edges[2:-2,2:-2] = 0
+        else:
+            edges = self.edges
+        edge_s = (edges * diff).sum()
+
+        if self.mask is None:
+            s = diff.sum()
+        else:
+            s = (self.mask*diff).sum()
+
+        self.last_board_average = self.board_average
+        self.board_average = self.board_average * self.decay_rate + s
+        self.last_edge_average = self.edge_average
+        self.edge_average = self.edge_average * self.decay_rate + edge_s
+
+        return self.board_average, self.edge_average
 
     def check(self):
         '''Check if the next frame is a good candidate.  If so, return it.'''
@@ -63,15 +100,35 @@ class FrameSelector:
             return False, None
 
         im_bw = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        if interesting_difference(self.last_good_frame,
-                                  self.last_good_frame_bw,
-                                  im, im_bw,
-                                  self.roi, self.mask, self.edges):
+        self.accumulate_difference(im_bw)
+
+        if self.board_average > self.recent_board_maximum:
+            self.recent_board_maximum = self.board_average
+            return False, im
+        elif self.board_average < self.recent_board_maximum \
+                                  * self.difference_threshold \
+             and \
+             self.board_average > self.last_board_average:
             self.last_good_frame = im
             self.last_good_frame_bw = im_bw
+            self.board_average = 0
+            self.last_board_average = 0
+            self.edge_average = 0
+            self.last_edge_average = 0
+            self.recent_board_maximum = 0
             return True, im
         else:
             return False, im
+        
+##        if interesting_difference(self.last_good_frame,
+##                                  self.last_good_frame_bw,
+##                                  im, im_bw,
+##                                  self.roi, self.mask, self.edges):
+##            self.last_good_frame = im
+##            self.last_good_frame_bw = im_bw
+##            return True, im
+##        else:
+##            return False, im
 
 def interesting_difference(im1, im1bw, im2, im2bw, roi, mask, edges):
         #take diff with last_good_frame

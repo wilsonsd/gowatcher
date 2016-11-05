@@ -39,7 +39,7 @@ grid = find_grid.get_grid_intersections(lines, BOARDSIZE)
 grid = np.int32(grid)
 
 cap = select_frames.FrameSelector(cap)
-cap.initialize(msec = 1)
+cap.initialize()
 
 board_mask = np.zeros(frame.shape[0:2], dtype=np.uint8)
 board_mask = cv2.fillConvexPoly(board_mask, board_corners[:,::-1], 1)

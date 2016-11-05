@@ -357,7 +357,7 @@ class StoneFinder:
         #print('whites', whites.shape, '\n', whites)
         #print('point_to_check shape', points_to_check.shape)
         points_to_check = points_to_check[points_to_check[:,3].argsort()]
-        print('points to check\n', points_to_check)
+        #print('points to check\n', points_to_check)
 
         for i, position in enumerate(points_to_check):
             row, col, color = np.int32(position[0:3])
@@ -377,7 +377,7 @@ class StoneFinder:
 
             if not close_like_empty and not self.stone_at[row,col]:
                 circle_goodness = self.like_circle(row, col)
-                print('circle goodness', circle_goodness)
+                #print('circle goodness', circle_goodness)
 
                 if (not like_empty and like_stone and circle_goodness <= 4) \
                    or \
@@ -388,9 +388,9 @@ class StoneFinder:
         empties = empties[empties[:,2].argsort()]
         for i, position in enumerate(empties):
             row, col, value = np.int32(position)
-            print('checking empty', row, col, value,
-                  self.features[(1,2),row,col].min())
-            print('self at', row, col, self.stone_at[row,col])
+            #print('checking empty', row, col, value,
+            #      self.features[(1,2),row,col].min())
+            #print('self at', row, col, self.stone_at[row,col])
             if value < (2/3)* self.features[(1,2),row,col].min() \
                and self.stone_at[row,col]:
                 return (row, col), 0
@@ -430,15 +430,15 @@ class StoneFinder:
             return 999999
         else:
             circles = circles[0]
-            print('circles')
-            print(circles)
-            print(np.linalg.norm(center - circles[:,0:2], axis=1))
+            #print('circles')
+            #print(circles)
+            #print(np.linalg.norm(center - circles[:,0:2], axis=1))
             #if the best circle is near the center, we're good.
             good_circles = np.where(self.stone_size[row,col]/3 >
                              np.linalg.norm(
                                  center - circles[:,0:2], axis=1))[0]
-            print('stone_size/2', self.stone_size[row,col]/2,
-                  'good circles at', good_circles)
+            #print('stone_size/2', self.stone_size[row,col]/2,
+            #      'good circles at', good_circles)
             if good_circles.shape[0] > 0:
                 return good_circles[0]
             else:
