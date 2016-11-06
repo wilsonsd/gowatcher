@@ -60,7 +60,8 @@ try:
             while True:
                 finder.calculate_features()
                 stone, color = finder.find_next_stone()
-                print('found stone', stone, color)
+                print('found stone', stone, color, 'in frame',
+                      cap.get(cv2.CAP_PROP_POS_FRAMES))
 
                 if color == 1:
                     white = np.int32(np.append(white, np.array([stone]),

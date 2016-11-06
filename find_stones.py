@@ -42,6 +42,7 @@ class StoneFinder:
         self.offsets = offsets
         if self.offsets is None:
             self.offsets = np.zeros((board_size, board_size, 2))
+        self.found_in_last_frame = False
 
         self.ycc_avgs = np.zeros((self.board_size, self.board_size, 3))
         self.hsv_avgs = np.zeros((self.board_size, self.board_size, 3))
@@ -143,8 +144,11 @@ class StoneFinder:
         self.img_ycc = cv2.cvtColor(im, cv2.COLOR_BGR2YCrCb)
         self.img_hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 
+        if self.found_in_last_frame:
+            self.last_gray_image = self.current_gray
+        self.found_in_last_frame = False
+
         #calculate difference from last image.
-        self.last_gray_image = self.current_gray
         self.current_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         if self.last_gray_image is None:
             self.diff_im = 255*np.ones(im.shape[0:2], dtype='uint8')
@@ -174,7 +178,7 @@ class StoneFinder:
             brd = cv2.fillConvexPoly(brd, board_corners[:,::-1], 1)
             #brd = cv2.dilate(brd, self.kernel, iterations=8)
             #cv2.imshow('brd', brd*255)
-            cv2.imshow('raw diff', self.diff_im)
+            #cv2.imshow('raw diff', self.diff_im)
             output = cv2.connectedComponentsWithStats(self.diff_im)
             num = output[0]
             components = output[1]
@@ -194,12 +198,12 @@ class StoneFinder:
             #cv2.imshow('obscured pre', 255*obscured)
             self.diff_im[ np.logical_and(np.logical_not(obscured),
                                          self.was_obscured) ] = 255
-            obscured = np.logical_and(np.logical_not(self.was_obscured),
-                                      obscured)
+            #obscured = np.logical_and(np.logical_not(self.was_obscured),
+            #                          obscured)
             self.was_obscured = obscured
 
             #cv2.imshow('obscured post', np.uint8(obscured))            
-            #cv2.imshow('diff', self.diff_im)
+            cv2.imshow('diff', self.diff_im)
 
 
         grid = self.grid
@@ -364,7 +368,7 @@ class StoneFinder:
             if self.stone_at[row,col]:
                 continue
             value = position[3]
-            print('inspecting', position)
+            #print('inspecting', position)
             like_empty = self.features[0,row,col] <= value
             close_like_empty = (6/5)*self.features[0,row,col] <= value
             stone_mean = np.mean(
@@ -372,8 +376,8 @@ class StoneFinder:
             stone_mean = 99999 if np.isnan(stone_mean) else stone_mean
             like_stone = value <=  stone_mean
             # condition 6c in photokifu paper, page 10, not implimented
-            print(self.features[0,row,col], stone_mean,
-                  'like_empty', like_empty, 'like_stone', like_stone)
+            #print(self.features[0,row,col], stone_mean,
+            #      'like_empty', like_empty, 'like_stone', like_stone)
 
             if not close_like_empty and not self.stone_at[row,col]:
                 circle_goodness = self.like_circle(row, col)
@@ -382,6 +386,7 @@ class StoneFinder:
                 if (not like_empty and like_stone and circle_goodness <= 4) \
                    or \
                    (not close_like_empty and circle_goodness <= 2):
+                    self.found_in_last_frame = True
                     return (row, col), color
 
         #if we didn't find any stones, look for removed stones
@@ -393,9 +398,9 @@ class StoneFinder:
             #print('self at', row, col, self.stone_at[row,col])
             if value < (2/3)* self.features[(1,2),row,col].min() \
                and self.stone_at[row,col]:
+                self.found_in_last_frame = True
                 return (row, col), 0
         
-        print('found no stone')
         #print(np.int32(self.diff_avgs))
         return None, None
 
