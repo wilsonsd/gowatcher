@@ -23,9 +23,13 @@ class FrameSelector:
         self.decay_rate = 0.2
         self.recent_board_maximum = 0
         self.difference_threshold = 0.5
+        self.debug = False
 
     def __getattr__(self, n):
         return getattr(self.cap, n)
+
+    def set_debug(self, debug):
+        self.debug = debug
 
     def set_roi(self, roi, mask):
         '''Set ROI and mask for the actual board area.'''
@@ -47,19 +51,22 @@ class FrameSelector:
 
     def difference(self, im):
         #print(im.shape, self.last_good_frame.shape)
-        diff = cv2.absdiff(self.last_good_frame, im)
-        channels = cv2.split(diff)
-        diff = cv2.max(cv2.max(channels[0], channels[1]), channels[2])
-        ret, diff = cv2.threshold(diff, 30, 1, cv2.THRESH_BINARY)
-        ker = np.ones((5,5), dtype=np.uint8)
-        diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
-
-##        if len(im.shape) == 3 and im.shape[2] > 1:
-##            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-##        diff = cv2.absdiff(self.last_good_frame_bw, im)
-##        ret, diff = cv2.threshold(diff, 35, 1, cv2.THRESH_BINARY)
+##        diff = cv2.absdiff(self.last_good_frame, im)
+##        channels = cv2.split(diff)
+##        diff = cv2.max(cv2.max(channels[0], channels[1]), channels[2])
+##        ret, diff = cv2.threshold(diff, 30, 1, cv2.THRESH_BINARY)
 ##        ker = np.ones((5,5), dtype=np.uint8)
 ##        diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
+
+
+        if len(im.shape) == 3 and im.shape[2] > 1:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        diff = cv2.absdiff(self.last_good_frame_bw, im)
+        ret, diff = cv2.threshold(diff, 35, 1, cv2.THRESH_BINARY)
+        ker = np.ones((5,5), dtype=np.uint8)
+        diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
+        if self.debug:
+            cv2.imshow('debug: select_frames.diff', diff)
 
         return diff
 

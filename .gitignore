@@ -2,3 +2,5 @@ tests/**
 **/*.pyc
 __pycache__/**
 *.pyc
+__pycache__/select_frames.cpython-35.pyc
+*.pyc
