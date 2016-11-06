@@ -28,10 +28,11 @@ try:
     while cap.isOpened():
         ret, frame = cap.check()
         cv2.imshow('video', frame)
+        cv2.imshow('diff', cap.diff*255)
         if ret:
             cv2.imshow('last good', frame)
 
-        if cv2.waitKey(20) > 0:
+        if cv2.waitKey(1) > 0:
             break
 except:
     cap.release()
