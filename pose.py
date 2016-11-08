@@ -53,11 +53,11 @@ def reprojection_error(objp, imgp, rvec, tvec, cam_mtx, dist):
 def compute_offsets(grid, board_size, t, rvec, tvec, cam_mtx,
                     dist = None, stone_height=9/22):
     objp = np.zeros((board_size**2, 3), dtype=np.float32)
-    objp[:,0:2] = np.mgrid[0:board_size,0:board_size].reshape(-1,2)
+    objp[:,0:2] = np.mgrid[0:board_size,0:board_size].T[:,:,::-1].reshape(-1,2)
     objp = objp * np.array([1, t, 1], dtype=np.float32)
-    objp[:,2] = stone_height
+    objp[:,2] = -stone_height
     imgp, jac = cv2.projectPoints(objp, rvec, tvec, cam_mtx, dist)
-    return (imgp[:,0,:].reshape(board_size,board_size,2) - grid)
+    return imgp[:,0,:].reshape(board_size,board_size,2)
 
 def draw_pose(img, board_size, corners, t, rvec, tvec, cam_mtx, dist = None):
     axis = np.float32([[3, 0, 0], [0, 3, 0], [0, 0, -3]])
