@@ -28,21 +28,19 @@ class StoneFinder:
         white -- a list of (row,col) pairs of known white stones
         black -- a list of (row,col) pairs of known black stones
         offsets -- numpy array with shape (size, size, 2) giving, for each
-                   board intersection, the x and y pixel offset to use,
+                   board intersection, the offset pixel to use,
                    based on the perspective at which we are viewing
-                   the board. (not implemented!)
+                   the board.
         """
 
         self.last_gray_image = None
         self.board_size = board_size
         self.lines = lines
-        self.grid = grid
+        self.grid = np.int32(grid)
         self.white = white
         self.black = black
-        self.offsets = offsets
-        if self.offsets is None:
-            self.offsets = np.zeros((board_size, board_size, 2))
         self.found_in_last_frame = False
+        self.offsets = offsets if offsets is not None else grid
 
         self.ycc_avgs = np.zeros((self.board_size, self.board_size, 3))
         self.hsv_avgs = np.zeros((self.board_size, self.board_size, 3))
@@ -98,11 +96,14 @@ class StoneFinder:
                                    self.roi_size, self.roi_size),
                                   dtype='uint8')
         for i, j in util.square(self.roi_size):
-            dist_sq = (i-self.roi_middle)*(i-self.roi_middle)+\
+            dist_sq_grid = (i-self.roi_middle)*(i-self.roi_middle)+\
                (j-self.roi_middle)*(j-self.roi_middle)
+            delta = self.roi_middle + (self.offsets - grid) \
+                    - np.array([i,j], dtype=np.uint8)
+            dist_sq_offset = (delta*delta).sum(axis=2)
             rad_sq = (self.stone_size/4) * (self.stone_size/4)
-            self.stone_roi[np.logical_and(0.1*rad_sq < dist_sq,
-                                          dist_sq < rad_sq),
+            self.stone_roi[np.logical_and(0.05*rad_sq < dist_sq_grid,
+                                          dist_sq_offset < 0.4*rad_sq),
                            i,j] = 255
 #           if 0.1*rad_sq < dist_sq and \
 #               dist_sq < rad_sq:
@@ -448,7 +449,19 @@ class StoneFinder:
                 return good_circles[0]
             else:
                 return 99999
-            
+
+    def draw_stone_masks(self, im):
+        for i,j in util.square(self.board_size):
+            #print('roi_middle', self.roi_middle)
+            #print('stone roi', self.stone_roi[i,j].shape)
+            roi = im[self.grid[i,j,0]-self.roi_middle:
+                     self.grid[i,j,0]+self.roi_middle+1,
+                     self.grid[i,j,1]-self.roi_middle:
+                     self.grid[i,j,1]+self.roi_middle+1]
+            #print('roi', roi.shape)
+            roi[self.stone_roi[i,j] > 0, :] = 255
+
+        return im
 
 if __name__ == "__main__":
     import test_find_stone_sequence

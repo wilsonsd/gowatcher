@@ -18,11 +18,10 @@ BOARDSIZE = 9
 #source = 'tests/go game.mp4'
 source=0
 stone_size=10
-grid_corners = np.array([[20, 95], [20, 391], [339, 393], [341, 93]],
-                        dtype=np.int32)
-                          
-board_corners = np.array([[7, 79], [7, 403], [354, 409], [354, 80]],
-                         dtype=np.int32)
+#grid_corners = np.array([[20, 95], [20, 391], [339, 393], [341, 93]],
+#                        dtype=np.int32)
+#board_corners = np.array([[7, 79], [7, 403], [354, 409], [354, 80]],
+#                         dtype=np.int32)
 
 cap = cv2.VideoCapture(source)
 
@@ -30,7 +29,7 @@ if not cap.isOpened():
     cap.open()
 
 #throw away several frames so the camera can self-calibrate
-for i in range(50):
+for i in range(10):
     cap.read()
 
 ret, frame = cap.read()
@@ -38,6 +37,9 @@ ret, frame = cap.read()
 white = np.zeros((0,2), dtype='int32')
 black = np.zeros((0,2), dtype='int32')
 
+data = np.load('camera_params.npz')
+mtx = data['mtx']
+dist = data['dist']
 
 lines = find_grid.find_grid(frame, BOARDSIZE)
 grid = find_grid.get_grid_intersections(lines, BOARDSIZE)
@@ -45,6 +47,9 @@ grid = np.int32(grid)
 board_corners = np.array([grid[0,0], grid[0,BOARDSIZE-1],
                           grid[BOARDSIZE-1,BOARDSIZE-1], grid[BOARDSIZE-1,0]],
                          dtype=np.int32)
+
+rvec, tvec, inliers, t = pose.get_pose(board_corners, BOARDSIZE, mtx, dist)
+offsets = post.compute_offsets(grid, BOARDSIZE, t, rvec, tvec, mtx, dist)
 
 cap = select_frames.FrameSelector(cap)
 cap.initialize()
@@ -55,7 +60,7 @@ board_mask = cv2.fillConvexPoly(board_mask, board_corners[:,::-1], 1)
 cap.set_roi(None, board_mask)
 
 finder = find_stones.StoneFinder(BOARDSIZE, lines, grid,
-                                white, black)
+                                white, black, offsets)
 finder.set_last_gray_image(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
 print("watching now")
 found_one = False
