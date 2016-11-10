@@ -27,13 +27,15 @@ img = cv2.imread(prefix+file.readline().strip(), cv2.IMREAD_COLOR)
 lines = find_grid.find_grid(img, BOARDSIZE,corners)
 grid = find_grid.get_grid_intersections(lines, BOARDSIZE)
 grid = np.int32(grid)
+offsets = grid.copy()
+offsets[:,:,0] = offsets[:,:,0] - 2
 
 #print('shape of image', img.shape)
 #print('grid')
 #print(grid)
 
 finder = find_stones.StoneFinder(BOARDSIZE, lines, grid,
-               white, black)
+               white, black, offsets)
 finder.set_last_gray_image(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
 
 ##draw_stones(img, grid.reshape((-1,2)), (0, 255, 255), 2)
