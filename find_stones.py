@@ -409,11 +409,11 @@ class StoneFinder:
         '''Return true if a circle is found near gridpoint (row, col).'''
 
         radius = int(self.stone_size[row,col]//2)
-        region = self.current_gray[max(self.grid[row,col,0] - radius,0) :
-                                   min(self.grid[row,col,0] + radius,
+        region = self.current_gray[max(self.offsets[row,col,0] - radius,0) :
+                                   min(self.offsets[row,col,0] + radius,
                                        self.diff_im.shape[0]-1),
-                                   max(self.grid[row,col,1] - radius,0) :
-                                   min(self.grid[row,col,1] + radius,
+                                   max(self.offsets[row,col,1] - radius,0) :
+                                   min(self.offsets[row,col,1] + radius,
                                        self.diff_im.shape[1]-1)].copy()
         center = np.array([radius, radius])
 

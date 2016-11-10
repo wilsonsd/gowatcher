@@ -7,7 +7,7 @@ from debug_util import draw_stones
 
 
 BOARDSIZE = 19
-RUN_UNTIL = 28
+RUN_UNTIL = 1
 pic = 0
 
 corners = np.array([[55, 119], [41, 521], [449, 619], [450, 18]],
