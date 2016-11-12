@@ -425,13 +425,12 @@ class StoneFinder:
                                    maxRadius = 4*self.stone_size[row,col]//3)
         #print('center', center, 'circles', circles, sep='\n')
         
-        if circles is not None:
-            icircles = np.round(circles[0, :]).astype("int")
-            for (x, y, r) in icircles:
-                cv2.circle(region, (x, y), r, 255, 1)
-
+##        if circles is not None:
+##            icircles = np.round(circles[0, :]).astype("int")
+##            for (x, y, r) in icircles:
+##                cv2.circle(region, (x, y), r, 255, 1)
+##        cv2.imshow('circle', region)
         
-        cv2.imshow('circle', region)
         if circles is None:
             return 999999
         else:

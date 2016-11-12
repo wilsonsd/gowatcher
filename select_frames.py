@@ -58,9 +58,10 @@ class FrameSelector:
 ##        ker = np.ones((5,5), dtype=np.uint8)
 ##        diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
 
-
         if len(im.shape) == 3 and im.shape[2] > 1:
             im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        #print(self.last_good_frame_bw.shape)
+        #print(im.shape)
         diff = cv2.absdiff(self.last_good_frame_bw, im)
         ret, diff = cv2.threshold(diff, 35, 1, cv2.THRESH_BINARY)
         ker = np.ones((5,5), dtype=np.uint8)
@@ -76,8 +77,11 @@ class FrameSelector:
         msec - number of milliseconds to watch the board to compute averages.
         delay - number of milliseconds to wait between observations.'''
 
-
+        
         ret, example_frame = self.read()
+        #print(example_frame)
+        if not ret:
+            print('read frame failed')
         self.last_good_frame = example_frame
         self.last_good_frame_bw = cv2.cvtColor(
             example_frame, cv2.COLOR_BGR2GRAY)
@@ -113,11 +117,13 @@ class FrameSelector:
         '''Check if the next frame is a good candidate.  If so, return it.'''
 
         ret, im = self.read()
+        #print('check ret', ret)
+        #print(im)
         if not ret:
             return False, None
 
-        #im_bw = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        self.accumulate_difference(im)
+        im_bw = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        self.accumulate_difference(im_bw)
 
         if self.board_average > self.recent_board_maximum:
             self.recent_board_maximum = self.board_average
