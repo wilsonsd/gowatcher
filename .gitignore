@@ -6,3 +6,4 @@ __pycache__/select_frames.cpython-35.pyc
 *.pyc
 *.pyc
 __pycache__/debug_util.cpython-35.pyc
+docs/**
