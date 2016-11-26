@@ -168,7 +168,7 @@ def interesting_difference(im1, im1bw, im2, im2bw, roi, mask, edges):
     ker = np.ones((5,5), dtype=np.uint8)
     diff = cv2.morphologyEx(diff, cv2.MORPH_CLOSE, ker)
     
-    cv2.imshow('diff', 255*diff)
+    #cv2.imshow('diff', 255*diff)
 
     if edges is None:
         edges = np.ones(diff.shape, dtype='uint8')

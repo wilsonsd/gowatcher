@@ -11,8 +11,9 @@ from itertools import product
 class StoneFinder:
     """A class for finding stones in an image"""
     
-    def __init__(self, board_size, lines, \
-                 grid, white, black, offsets = None):
+    def __init__(self, board_size, image_shape, lines, \
+                 grid, white, black, rvec = np.array([0,0,0], dtype=np.float32),
+                 offsets = None,):
         """Initialize StoneFinder object.
 
         board_size -- the size of the board (e.g. 9, 13, 19)
@@ -27,6 +28,8 @@ class StoneFinder:
                 by find_grid.py
         white -- a list of (row,col) pairs of known white stones
         black -- a list of (row,col) pairs of known black stones
+        rvec -- the rotation vector that bring the world coordinates
+                to the camera coordinates.
         offsets -- numpy array with shape (size, size, 2) giving, for each
                    board intersection, the offset pixel to use,
                    based on the perspective at which we are viewing
@@ -40,42 +43,52 @@ class StoneFinder:
         self.white = white
         self.black = black
         self.found_in_last_frame = False
-        self.offsets = offsets if offsets is not None else grid
+        self.offsets = np.int32(offsets) if offsets is not None else grid
+        #print(cv2.Rodrigues(rvec))
+        self.pitch_cosine = cv2.Rodrigues(rvec)[0][2,2]
+        #print('rotation matrix\n', cv2.Rodrigues(rvec)[0])
+        #print('Rodrigues vector\n', rvec)
 
         self.ycc_avgs = np.zeros((self.board_size, self.board_size, 3))
         self.hsv_avgs = np.zeros((self.board_size, self.board_size, 3))
         self.disuniformity = np.zeros((self.board_size, self.board_size))
         self.diff_avgs = np.zeros((self.board_size, self.board_size))
 
-        self.was_obscured = None                                  
-
+        self.was_obscured = None
+        
         #Approximate stone size
         #TODO: calculate vertical and horizontal sizes independently.
         self.stone_size = np.zeros((board_size, board_size), np.uint8)
         bsmo = board_size-1
+        oort = 1/math.sqrt(2)
         def dist(i,j,a,b):
             return int(np.linalg.norm(grid[i,j]-grid[i+a,j+b]))
-        self.stone_size[0,0] = max(dist(0,0,1,0), dist(0,0,0,1), dist(0,0,1,1))
+        self.stone_size[0,0] = max(dist(0,0,1,0), dist(0,0,0,1),
+                                   oort*dist(0,0,1,1))
         self.stone_size[0,bsmo] = max(dist(0,bsmo,1,0), dist(0,bsmo,0,-1),
-                                      dist(0,bsmo, 1, -1))
+                                      oort*dist(0,bsmo, 1, -1))
         self.stone_size[bsmo,0] = max(dist(bsmo,0,-1,0), dist(bsmo,0,0,1),
-                                      dist(bsmo,0, -1, 1))
+                                      oort*dist(bsmo,0, -1, 1))
         self.stone_size[bsmo,bsmo] = max(dist(bsmo,bsmo,-1,0),
-                        dist(bsmo,bsmo,0,-1), dist(bsmo,bsmo,-1,-1))
+                        dist(bsmo,bsmo,0,-1), oort*dist(bsmo,bsmo,-1,-1))
         for i in range(1,board_size-1):
-            self.stone_size[0,i] = max(dist(0,i,1,-1), dist(0,i,1,0),
-                                       dist(0,i,1,1))
-            self.stone_size[bsmo,i] = max(dist(bsmo,i,-1,-1),
-                            dist(bsmo,i,-1,0), dist(bsmo,i,-1,1))
-            self.stone_size[i,0] = max(dist(i,0,-1,1), dist(i,0,0,1),
-                                       dist(i,0,1,1))
-            self.stone_size[i,bsmo] = max(dist(i,bsmo,-1,-1),
-                            dist(i,bsmo,0,-1), dist(i,bsmo,1,-1))
+            self.stone_size[0,i] = max(oort*dist(0,i,1,-1), dist(0,i,1,0),
+                                       oort*dist(0,i,1,1), dist(0,i,0,-1),
+                                       dist(0,i,0,1))
+            self.stone_size[bsmo,i] = max(oort*dist(bsmo,i,-1,-1),
+                            dist(bsmo,i,-1,0), oort*dist(bsmo,i,-1,1),
+                            dist(bsmo,i,0,-1), dist(bsmo,i,0,1))
+            self.stone_size[i,0] = max(oort*dist(i,0,-1,1), dist(i,0,0,1),
+                                       oort*dist(i,0,1,1), dist(i,0,-1,0),
+                                       dist(i,0,1,0))
+            self.stone_size[i,bsmo] = max(oort*dist(i,bsmo,-1,-1),
+                            dist(i,bsmo,0,-1), oort*dist(i,bsmo,1,-1),
+                            dist(i,bsmo,-1,0), dist(i,bsmo,1,0))
         for i,j in product(range(1,bsmo), range(1, bsmo)):
-            self.stone_size[i,j] = max(dist(i,j,-1,-1), dist(i,j,-1,0),
-                                       dist(i,j,-1,1), dist(i,j,0,-1),
-                                       dist(i,j,0,1), dist(i,j,1,-1),
-                                       dist(i,j,1,0), dist(i,j,1,1))
+            self.stone_size[i,j] = max(oort*dist(i,j,-1,-1), dist(i,j,-1,0),
+                                       oort*dist(i,j,-1,1), dist(i,j,0,-1),
+                                       dist(i,j,0,1), oort*dist(i,j,1,-1),
+                                       dist(i,j,1,0), oort*dist(i,j,1,1))
         self.middle_size = self.stone_size[board_size//2,board_size//2]
 
         #prepare the morphological operation kernel.
@@ -90,7 +103,7 @@ class StoneFinder:
         
 
         #prepare the roi for averaging rgb & hs values near intersection
-        self.roi_middle = int(np.amax(self.stone_size)/4)
+        self.roi_middle = int(np.amax(self.stone_size)/2)
         self.roi_size = self.roi_middle*2 + 1
         self.stone_roi = np.zeros((self.board_size,self.board_size,
                                    self.roi_size, self.roi_size),
@@ -101,9 +114,9 @@ class StoneFinder:
             delta = self.roi_middle + (self.offsets - grid) \
                     - np.array([i,j], dtype=np.uint8)
             dist_sq_offset = (delta*delta).sum(axis=2)
-            rad_sq = (self.stone_size/4) * (self.stone_size/4)
-            self.stone_roi[np.logical_and(0.05*rad_sq < dist_sq_grid,
-                                          dist_sq_offset < 0.4*rad_sq),
+            rad_sq = (self.stone_size/2) * (self.stone_size/2)
+            self.stone_roi[np.logical_and(0.02*rad_sq < dist_sq_grid,
+                                          dist_sq_offset < 0.3*rad_sq),
                            i,j] = 255
 #           if 0.1*rad_sq < dist_sq and \
 #               dist_sq < rad_sq:
@@ -137,10 +150,36 @@ class StoneFinder:
         self.black = black
 
     def set_last_gray_image(self, im):
+        im, top, left = self.resize_image(im)
         self.last_gray_image = im
         self.current_gray = im
 
+    def resize_image(self, im):
+        #decide how much to pad the image, to make sure gridpoints are
+        # far enough from the edge of the image.
+        min_row, dc1, dc2, dc3 = cv2.minMaxLoc(
+            cv2.min(self.grid[:,:,0], self.offsets[:,:,0]) - self.roi_middle)
+        dc1, max_row, dc2, dc3 = cv2.minMaxLoc(
+            cv2.max(self.grid[:,:,0], self.offsets[:,:,0]) + self.roi_middle)
+        min_col, dc1, dc2, dc3 = cv2.minMaxLoc(
+            cv2.min(self.grid[:,:,1], self.offsets[:,:,1]) - self.roi_middle)
+        dc1, max_col, dc2, dc3 = cv2.minMaxLoc(
+            cv2.max(self.grid[:,:,1], self.offsets[:,:,1]) + self.roi_middle)
+        top = max(0, int(-min_row))
+        bottom = max(0, int(max_row - im.shape[0]))
+        left = max(0, int(-min_col))
+        right = max(0, int(max_col - im.shape[1]))
+        return cv2.copyMakeBorder(im, top, bottom, left, right,
+                                cv2.BORDER_REPLICATE), top, left
+        
+
     def set_image(self, im):
+        im, top, left = self.resize_image(im)
+        self.cur_grid = self.grid + np.array([top, left], dtype=np.int32)
+        grid = self.cur_grid
+        self.cur_offsets = self.offsets + np.array([top, left], dtype=np.int32)
+        offsets = self.cur_offsets
+        
         self.img_bgr = im
         self.img_ycc = cv2.cvtColor(im, cv2.COLOR_BGR2YCrCb)
         self.img_hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
@@ -166,14 +205,14 @@ class StoneFinder:
             #self.diff_im = cv2.dilate(self.diff_im, kernel)
 
             k = 2
-            board_corners = np.array([self.grid[0,0] - k*(self.grid[1,1]
-                                                          - self.grid[0,0]),
-                                      self.grid[0,-1] - k*(self.grid[1,-2]
-                                                           - self.grid[0,-1]),
-                                      self.grid[-1,-1] - k*(self.grid[-2,-2]
-                                                            - self.grid[-1,-1]),
-                                      self.grid[-1,0] - k*(self.grid[-2,1]
-                                                           - self.grid[-1,0])],
+            board_corners = np.array([grid[0,0] - k*(grid[1,1]
+                                                          - grid[0,0]),
+                                      grid[0,-1] - k*(grid[1,-2]
+                                                           - grid[0,-1]),
+                                      grid[-1,-1] - k*(grid[-2,-2]
+                                                            - grid[-1,-1]),
+                                      grid[-1,0] - k*(grid[-2,1]
+                                                           - grid[-1,0])],
                                      dtype=np.int32)            
             brd = np.zeros(self.diff_im.shape, dtype=np.uint8)
             brd = cv2.fillConvexPoly(brd, board_corners[:,::-1], 1)
@@ -204,36 +243,43 @@ class StoneFinder:
             self.was_obscured = obscured
 
             #cv2.imshow('obscured post', np.uint8(obscured))            
-            cv2.imshow('diff', self.diff_im)
+            #cv2.imshow('diff', self.diff_im)
 
-
-        grid = self.grid
 
         for i, j in util.square(self.board_size):
             try:
                 #print('self.roi_middle', self.roi_middle)
                 #print('self.stone_roi[', i, ',', j, ']', self.stone_roi[i,j].shape)
-                self.ycc_avgs[i,j,:] = np.array(cv2.mean( 
+#                ycc_roi, center = util.make_roi_rectangle(
+#                    self.img_ycc, grid[i,j], self.roi_middle)
+#                self.ycc_avgs[i,j,:] = np.array(cv2.mean(
+                self.ycc_avgs[i,j,:] = np.array(cv2.mean(
                     self.img_ycc[grid[i,j,0]-self.roi_middle:
-                                 grid[i,j,0]+self.roi_middle,
+                                 grid[i,j,0]+self.roi_middle+1,
                                  grid[i,j,1]-self.roi_middle:
-                                 grid[i,j,1]+self.roi_middle],
+                                 grid[i,j,1]+self.roi_middle+1],
                     self.stone_roi[i,j]))[0:3]
                 self.hsv_avgs[i,j,:] = np.array(cv2.mean(
                     self.img_hsv[grid[i,j,0]-self.roi_middle:
-                                 grid[i,j,0]+self.roi_middle,
+                                 grid[i,j,0]+self.roi_middle+1,
                                  grid[i,j,1]-self.roi_middle:
-                                 grid[i,j,1]+self.roi_middle],
+                                 grid[i,j,1]+self.roi_middle+1],
                     self.stone_roi[i,j]))[0:3]
                 self.diff_avgs[i,j] = cv2.mean(
                     self.diff_im[grid[i,j,0]-self.roi_middle:
-                                 grid[i,j,0]+self.roi_middle,
+                                 grid[i,j,0]+self.roi_middle+1,
                                  grid[i,j,1]-self.roi_middle:
-                                 grid[i,j,1]+self.roi_middle],
+                                 grid[i,j,1]+self.roi_middle+1],
                     self.stone_roi[i,j])[0]
             except:
+                print(i,j,'shape of roi', self.stone_roi[i,j].shape)
+                print('shape of patch', 
+                     self.img_ycc[grid[i,j,0]-self.roi_middle:
+                                 grid[i,j,0]+self.roi_middle+1,
+                                 grid[i,j,1]-self.roi_middle:
+                                 grid[i,j,1]+self.roi_middle+1].shape)
                 print('index probably out of bounds', i, j,
-                      self.roi_middle, grid[i,j])
+                      self.roi_middle, grid[i,j], self.img_ycc.shape)
                 #cv2.circle(self.img_bgr, tuple(grid[i,j]), 5, (0,255,0),-1)
                 raise
 
@@ -369,7 +415,7 @@ class StoneFinder:
             if self.stone_at[row,col]:
                 continue
             value = position[3]
-            #print('inspecting', position)
+            print('inspecting', position)
             like_empty = self.features[0,row,col] <= value
             close_like_empty = (6/5)*self.features[0,row,col] <= value
             stone_mean = np.mean(
@@ -377,8 +423,8 @@ class StoneFinder:
             stone_mean = 99999 if np.isnan(stone_mean) else stone_mean
             like_stone = value <=  stone_mean
             # condition 6c in photokifu paper, page 10, not implimented
-            #print(self.features[0,row,col], stone_mean,
-            #      'like_empty', like_empty, 'like_stone', like_stone)
+            print(self.features[0,row,col], stone_mean,
+                  'like_empty', like_empty, 'like_stone', like_stone)
 
             if not close_like_empty and not self.stone_at[row,col]:
                 circle_goodness = self.like_circle(row, col)
@@ -408,42 +454,46 @@ class StoneFinder:
     def like_circle(self, row, col):
         '''Return true if a circle is found near gridpoint (row, col).'''
 
-        radius = int(self.stone_size[row,col]//2)
-        region = self.current_gray[max(self.offsets[row,col,0] - radius,0) :
-                                   min(self.offsets[row,col,0] + radius,
-                                       self.diff_im.shape[0]-1),
-                                   max(self.offsets[row,col,1] - radius,0) :
-                                   min(self.offsets[row,col,1] + radius,
-                                       self.diff_im.shape[1]-1)].copy()
-        center = np.array([radius, radius])
+        radius = round(self.stone_size[row,col]/2.3)
+        vradius = int(radius / self.pitch_cosine)
+        #vradius = radius
+        region = self.current_gray[
+            self.cur_offsets[row,col,0] - radius :
+            self.cur_offsets[row,col,0] + radius+1,
+            self.cur_offsets[row,col,1] - radius :
+            self.cur_offsets[row,col,1] + radius+1].copy()
+        region = cv2.resize(region, dsize=(0,0), fx=1, fy=1/self.pitch_cosine)
+        center = np.array([vradius, radius])
+        #print('pitch cos', self.pitch_cosine)
+        #print('region shape', region.shape)
 
         region = cv2.GaussianBlur(region, (5, 5), 0)
         circles = cv2.HoughCircles(region, cv2.HOUGH_GRADIENT, 1,
-                                   self.stone_size[row,col]//2, param1=25,
-                                   param2=5,
+                                   radius, param1=25,
+                                   param2=10,
                                    minRadius=self.stone_size[row,col]//3,
                                    maxRadius = 4*self.stone_size[row,col]//3)
         #print('center', center, 'circles', circles, sep='\n')
         
-##        if circles is not None:
-##            icircles = np.round(circles[0, :]).astype("int")
-##            for (x, y, r) in icircles:
-##                cv2.circle(region, (x, y), r, 255, 1)
-##        cv2.imshow('circle', region)
+        if circles is not None:
+            icircles = np.round(circles[0, :]).astype("int")
+            for (x, y, r) in icircles:
+                cv2.circle(region, (x, y), r, 255, 1)
+        cv2.imshow('circle', region)
         
         if circles is None:
             return 999999
         else:
             circles = circles[0]
-            #print('circles')
-            #print(circles)
-            #print(np.linalg.norm(center - circles[:,0:2], axis=1))
+            print('circles')
+            print(circles)
+            print(np.linalg.norm(center - circles[:,0:2], axis=1))
             #if the best circle is near the center, we're good.
-            good_circles = np.where(self.stone_size[row,col]/3 >
+            good_circles = np.where(self.stone_size[row,col]/2.2 >
                              np.linalg.norm(
                                  center - circles[:,0:2], axis=1))[0]
-            #print('stone_size/2', self.stone_size[row,col]/2,
-            #      'good circles at', good_circles)
+            print('stone_size/2', self.stone_size[row,col]/2,
+                  'good circles at', good_circles)
             if good_circles.shape[0] > 0:
                 return good_circles[0]
             else:
@@ -453,10 +503,10 @@ class StoneFinder:
         for i,j in util.square(self.board_size):
             #print('roi_middle', self.roi_middle)
             #print('stone roi', self.stone_roi[i,j].shape)
-            roi = im[self.grid[i,j,0]-self.roi_middle:
-                     self.grid[i,j,0]+self.roi_middle+1,
-                     self.grid[i,j,1]-self.roi_middle:
-                     self.grid[i,j,1]+self.roi_middle+1]
+            roi = im[self.cur_grid[i,j,0]-self.roi_middle:
+                     self.cur_grid[i,j,0]+self.roi_middle+1,
+                     self.cur_grid[i,j,1]-self.roi_middle:
+                     self.cur_grid[i,j,1]+self.roi_middle+1]
             #print('roi', roi.shape)
             roi[self.stone_roi[i,j] > 0, :] = 255
 

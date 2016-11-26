@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import math
 
 def get_pose(corners, board_size, cam_matrix = None, distortion = None,
              debug = False):
@@ -69,6 +70,18 @@ def draw_pose(img, board_size, corners, t, rvec, tvec, cam_mtx, dist = None):
     cv2.line(img, tuple(corners[0].ravel())[::-1],
              tuple(imgp[2].ravel())[::-1], (0, 0, 255), 3)
     return img
+
+def get_pitch_angle(rvec):
+    return math.acos(cv2.Rodrigues(rvec)[2,2])
+
+def get_fake_camera(im):
+    mtx = np.identity(3)
+    mtx[0,2] = im.shape[0]//2
+    mtx[1,2] = im.shape[1]//2
+    mtx[0,0] = max(im.shape[0],im.shape[1])
+    mtx[1,1] = mtx[0,0]
+    dist = None
+    return mtx, dist
 
 if __name__ == '__main__':
     import test_pose

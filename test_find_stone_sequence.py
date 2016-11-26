@@ -4,13 +4,14 @@ import find_grid
 import find_stones
 import matplotlib.pyplot as plt
 from debug_util import draw_stones
+import pose
 
 
 BOARDSIZE = 19
 RUN_UNTIL = 1
 pic = 0
 
-corners = np.array([[55, 119], [41, 521], [449, 619], [450, 18]],
+corners = np.array([[55, 117], [41, 520], [449, 618], [450, 17]],
                    dtype = 'float32')
 #white = np.array([(2, 3), (5, 2), (2, 14), (15, 13), (14, 16)], dtype='int32')
 #black = np.array([(3, 16), (4, 15), (15, 2), (15, 4), (16, 15)], dtype='int32')
@@ -27,20 +28,29 @@ img = cv2.imread(prefix+file.readline().strip(), cv2.IMREAD_COLOR)
 lines = find_grid.find_grid(img, BOARDSIZE,corners)
 grid = find_grid.get_grid_intersections(lines, BOARDSIZE)
 grid = np.int32(grid)
-offsets = grid.copy()
-offsets[:,:,0] = offsets[:,:,0] - 2
+
+mtx, dist = pose.get_fake_camera(img)
+rvec, tvec, inliers, t = pose.get_pose(corners, BOARDSIZE, mtx, dist)
+offsets = pose.compute_offsets(grid, BOARDSIZE, t, rvec, tvec, mtx, dist)
+
+##offsets = grid.copy()
+##offsets[:,:,0] = offsets[:,:,0] - 2
 
 #print('shape of image', img.shape)
 #print('grid')
 #print(grid)
 
-finder = find_stones.StoneFinder(BOARDSIZE, lines, grid,
-               white, black, offsets)
+finder = find_stones.StoneFinder(BOARDSIZE, img.shape, lines, grid,
+               white, black, rvec=rvec, offsets=offsets)
 finder.set_last_gray_image(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+finder.set_image(img)
 
+#img = finder.img_bgr
+#img = pose.draw_pose(img, BOARDSIZE, corners, t, rvec, tvec, mtx, dist)
+#finder.draw_stone_masks(img)
 ##draw_stones(img, grid.reshape((-1,2)), (0, 255, 255), 2)
-##cv2.imshow('game', img)
-##cv2.waitKey(500)
+#cv2.imshow('game', img)
+#cv2.waitKey(0)
 
 cont = True
 

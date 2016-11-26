@@ -46,19 +46,24 @@ def main():
 ##        w_code += '-w'
     #these used to be in an options object
     verbose = '2'
-    size = 19
+    size = 13
     komi = 5.5
 
     b_code = 'b'
     w_code = 'w'
     white_command = 'gnugo\gnugo --mode gtp --silent --color white'
 
-    video_source = 'tests/go game.mp4'
-    #video_source = 0
+    #video_source = 'tests/go game.mp4'
+    video_source = 0
 
     game_controller = gtp_controller.Game_controller(b_code, w_code)
     try:
-        player = video_player.VideoPlayer("camera_params.npz", video_source)
+        player = video_player.VideoPlayer("camera_params.npz",
+                                          video_source,
+                                          size,
+                                          "Gowatcher",
+                                          rotate_pic=True,
+                                          debug=True)
         engine = video_player.make_engine(player)
         channel = gtp_controller.Internal_gtp_channel(engine)
         black_controller = gtp_controller.Gtp_controller(channel, 'b')
